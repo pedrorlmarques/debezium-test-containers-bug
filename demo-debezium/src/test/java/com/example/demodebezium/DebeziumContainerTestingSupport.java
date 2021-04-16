@@ -3,8 +3,6 @@ package com.example.demodebezium;
 import io.debezium.testing.testcontainers.Connector;
 import io.debezium.testing.testcontainers.ConnectorConfiguration;
 import io.debezium.testing.testcontainers.DebeziumContainer;
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -24,7 +22,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
@@ -53,8 +50,7 @@ public interface DebeziumContainerTestingSupport {
     DebeziumContainer debezium = new DebeziumContainer("debezium/connect:latest")
             .withNetwork(network)
             .withKafka(kafka)
-            .dependsOn(kafka, postgres)
-            .withStartupTimeout(Duration.ofSeconds(5));
+            .dependsOn(kafka, postgres);
 
     @DynamicPropertySource
     static void setProperties(DynamicPropertyRegistry registry) {
@@ -69,15 +65,6 @@ public interface DebeziumContainerTestingSupport {
         registry.add("spring.datasource.password", postgres::getPassword);
     }
 
-    static void deleteTopics(String... topicsToDelete) {
-        try (AdminClient admin = AdminClient.create(
-                Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
-            admin.deleteTopics(List.of(topicsToDelete)).all().get();
-        } catch (ExecutionException | InterruptedException e) {
-            System.err.println(e.getMessage());
-        }
-    }
-
     default void initialiseOutboxConnector() {
         String name = "order-outbox-connector";
         debezium.updateOrCreateConnector(name, getConfiguration());
@@ -89,11 +76,6 @@ public interface DebeziumContainerTestingSupport {
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
         consumer.subscribe(List.of(topicNames));
         return consumer;
-    }
-
-    default KafkaConsumer<String, String> createConsumer(String group) {
-        Map<String, Object> consumerProps = new HashMap<>(getConsumerProps(group));
-        return new KafkaConsumer<>(consumerProps);
     }
 
     private Map<String, String> getConsumerProps(String group) {
